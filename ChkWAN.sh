@@ -367,12 +367,12 @@ if [ -n "$1" ];then
 
 	if [ "$(echo "$@" | grep -c 'cron')" -gt 0 ];then				# v1.15
 		CRON_SPEC=$(echo "$@" | sed -n "s/^.*cron=//p" | awk '{print $0}')
-		/etc/init.d/cru.sh d checkwan
+		/etc/init.d/cru.sh d WAN_Check
 		if [ -z "$CRON_SPEC" ];then
-			/etc/init.d/cru.sh a checkwan "*/30 * * * * /etc/init.d/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
+			/etc/init.d/cru.sh a WAN_Check "*/30 * * * * /etc/init.d/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
 		else
 			[ $(echo $CRON_SPEC | wc -w) -eq 1 ] && CRON_SPEC=$CRON_SPEC" \* \* \* \*"		# Allow just the Minutes argument
-			/etc/init.d/cru.sh a checkwan "$(echo $CRON_SPEC | tr -d '\') /etc/init.d/$SNAME"
+			/etc/init.d/cru.sh a WAN_Check "$(echo $CRON_SPEC | tr -d '\') /etc/init.d/$SNAME"
 		fi
 		CRONJOB=$(/etc/init.d/cru.sh l | grep "$0")
 		SayT "ChkWAN scheduled by cron"
