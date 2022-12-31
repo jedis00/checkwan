@@ -79,7 +79,7 @@ Say(){
    echo -e $$ $@ | logger -st "$(date) - ($(basename $0))"
 }
 SayT(){
-   echo -e $$ $@ | logger -t "($(basename $0))"
+   echo -e $$ $@ | logger -t "$(date) - ($(basename $0))"
 }
 Is_Private_IPv4() {
 	# 127.  0.0.0 – 127.255.255.255     127.0.0.0 /8
