@@ -1,5 +1,7 @@
 #!/bin/sh
 VER="v1.17"
+# curl binary
+# https://github.com/moparisthebest/static-curl/releases/download/v7.87.0/curl-armv7
 #============================================================================================ © 2016-2021 Martineau v1.17
 #
 # Monitor WAN connection state using PINGs to multiple hosts, or a single cURL 15 Byte data request and optionally a 10MB/500B WGET/CURL data transfer.
@@ -28,10 +30,10 @@ VER="v1.17"
 #                   Will REBOOT router if cURL (i.e. NO PINGs attempted) fails to retrieve the remote end-point IP address of the WAN (Max 15bytes)
 #           ChkWAN  cron
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 30mins.
-#                   'cru a ChkWAN "*/30 * * * * /jffs/scripts/ChkWAN.sh"'
+#                   '/etc/init.d/cru.sh a ChkWAN "*/30 * * * * /etc/init.d/ChkWAN.sh"'
 #           ChkWAN  cron=\*/5
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 5mins.
-#                   'cru a ChkWAN "*/5 * * * * /jffs/scripts/ChkWAN.sh"'
+#                   '/etc/init.d/cru.sh a ChkWAN "*/5 * * * * /etc/init.d/ChkWAN.sh"'
 #                   NOTE: You need to escape the '*' on the commandline :-(
 #           ChkWAN  nowait
 #                   By default the script will wait 10 secs before actually starting the check; 'nowait' (when used by cron) skips this delay.
@@ -48,14 +50,14 @@ VER="v1.17"
 #           ChkWAN  curl verbose
 #                   The 'verbose' directive applies to any cURL transfer, and will display the cURL request data transfer as it happens
 #
-# Cron schedule may be reset /jffs/scripts/ChkWAN_Reset_CRON.sh if you have:
+# Cron schedule may be reset /etc/init.d/ChkWAN_Reset_CRON.sh if you have:
 #
 #      Set up a static cron schedule every 10 minutes 2 times WAN Restart 3rd REBOOT
-#	            cru a Restart_WAN 00,10,30,40 * * * * /jffs/scripts/ChkWAN.sh wan force nowait
-#	            cru a Reboot_WAN 20,50 * * * * /jffs/scripts/ChkWAN.sh reboot force nowait
-#      but /jffs/scripts/ChkWAN_Reset_CRON.sh can change after very successful WAN UP check (Syslog monitor is better!!!?)
-#               cru a Restart_WAN 28,38,58,8 * * * * /jffs/scripts/ChkWAN.sh wan force nowait
-#               cru a Reboot_WAN 48,18 * * * * /jffs/scripts/ChkWAN.sh reboot force nowait
+#	            /etc/init.d/cru.sh a Restart_WAN 00,10,30,40 * * * * /etc/init.d/ChkWAN.sh wan force nowait
+#	            /etc/init.d/cru.sh a Reboot_WAN 20,50 * * * * /etc/init.d/ChkWAN.sh reboot force nowait
+#      but /etc/init.d/ChkWAN_Reset_CRON.sh can change after very successful WAN UP check (Syslog monitor is better!!!?)
+#               /etc/init.d/cru.sh a Restart_WAN 28,38,58,8 * * * * /etc/init.d/ChkWAN.sh wan force nowait
+#               /etc/init.d/cru.sh a Reboot_WAN 48,18 * * * * /etc/init.d/ChkWAN.sh reboot force nowait
 
 
 
@@ -95,16 +97,17 @@ Get_WAN_IF_Name () {
 		local INDEX=$1
 	fi
 
-	local IF_NAME=$(nvram get wan${INDEX}_ifname)				# DHCP/Static ?
+	#local IF_NAME=$(nvram get wan${INDEX}_ifname)				# DHCP/Static ?
 
 	# Usually this is probably valid for both eth0/ppp0e ?
-	if [ "$(nvram get wan${INDEX}_gw_ifname)" != "$IF_NAME" ];then
-		local IF_NAME=$(nvram get wan${INDEX}_gw_ifname)
-	fi
+	# if [ "$(nvram get wan${INDEX}_gw_ifname)" != "$IF_NAME" ];then
+	# 	local IF_NAME=$(nvram get wan${INDEX}_gw_ifname)
+	# fi
+	local IF_NAME=$(ifconfig | grep -o -E 'rmnet_data0|rmnet_data1')
 
-	if [ -n "$(nvram get wan0_pppoe_ifname)" ];then
-		local IF_NAME="$(nvram get wan0_pppoe_ifname)"		# PPPoE
-	fi
+	# if [ -n "$(nvram get wan0_pppoe_ifname)" ];then
+	# 	local IF_NAME="$(nvram get wan0_pppoe_ifname)"		# PPPoE
+	# fi
 
 	echo $IF_NAME
 
@@ -144,7 +147,7 @@ Check_WAN(){
 		done
 	else
 		# Max 15 char retrieval
-		IP=$(curl $CURL_INTERFACE --connect-timeout 5 $SILENT "http://ipecho.net/plain")		# v1.12 add $SILENT
+		IP=$(/etc/init.d/curl $CURL_INTERFACE --connect-timeout 5 $SILENT "http://ipecho.net/plain")		# v1.12 add $SILENT
 		if [ -n "$IP" ];then
 			STATUS=1
 		fi
@@ -172,7 +175,7 @@ Check_WAN(){
 		WGET_DATA=$2
 		#wget -O /dev/null -t2 -T2 $WGET_DATA
 		METHOD="cURL data retrieval"						# v1.14
-		RESULTS=$(curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
+		RESULTS=$(/etc/init.d/curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
 		RC=$?
 		RC18=$RC
 		TXTINTERRUPTED=
@@ -221,14 +224,21 @@ Check_WAN(){
 #=============================================================Main==============================================================
 Main() { true; }			# Syntax that is Atom Shellchecker compatible!
 
-ANSIColours
+# Fix for logging /dev/null
+if ! [ -c /dev/null ]; then
+	ls -al /dev/null >> /tmp/devnull-fix.log
+	rm -f /dev/null
+	mknod -m 0666 /dev/null c 1 3
+fi
+
+#ANSIColours
 
 # v384.13+ NVRAM variable 'lan_hostname' supersedes 'computer_name'
-[ -n "$(nvram get computer_name)" ] && MYROUTER=$(nvram get computer_name) || MYROUTER=$(nvram get lan_hostname)		# v1.15
+#[ -n "$(nvram get computer_name)" ] && MYROUTER=$(nvram get computer_name) || MYROUTER=$(nvram get lan_hostname)		# v1.15
 
 trap '' SIGHUP					# v1.15 Since 'nohup' doesn't work; Allow starting this script as a background task from command line!
 
-FIRMWARE=$(echo $(nvram get buildno) | awk 'BEGIN { FS = "." } {printf("%03d%02d",$1,$2)}')
+#FIRMWARE=$(echo $(nvram get buildno) | awk 'BEGIN { FS = "." } {printf("%03d%02d",$1,$2)}')
 
 SNAME="${0##*/}"							# Script name
 
@@ -357,18 +367,18 @@ if [ -n "$1" ];then
 
 	if [ "$(echo "$@" | grep -c 'cron')" -gt 0 ];then				# v1.15
 		CRON_SPEC=$(echo "$@" | sed -n "s/^.*cron=//p" | awk '{print $0}')
-		cru d WAN_Check
+		/etc/init.d/cru.sh d checkwan
 		if [ -z "$CRON_SPEC" ];then
-			cru a WAN_Check "*/30 * * * * /jffs/scripts/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
+			/etc/init.d/cru.sh a checkwan "*/30 * * * * /etc/init.d/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
 		else
 			[ $(echo $CRON_SPEC | wc -w) -eq 1 ] && CRON_SPEC=$CRON_SPEC" \* \* \* \*"		# Allow just the Minutes argument
-			cru a WAN_Check "$(echo $CRON_SPEC | tr -d '\') /jffs/scripts/$SNAME"
+			/etc/init.d/cru.sh a checkwan "$(echo $CRON_SPEC | tr -d '\') /etc/init.d/$SNAME"
 		fi
-		CRONJOB=$(cru l | grep "$0")
+		CRONJOB=$(/etc/init.d/cru.sh l | grep "$0")
 		SayT "ChkWAN scheduled by cron"
 		echo -en $cBCYA"\n\tChkWAN scheduled by cron\n\n\t"$cBGRE
-		cru l | grep $0
-		cru l | grep $0 >>/tmp/syslog.log
+		/etc/init.d/cru.sh l | grep $0
+		/etc/init.d/cru.sh l | grep $0 >>/tmp/syslog.log
 		echo -e $cRESET
 	fi
 
@@ -388,9 +398,9 @@ else
 			#if [ "$DEV" != "ppp0" ];then			# v1.13 Don't differentiate PING targets for 'ppp0' & use Quad9 instead of Google
 				# List of PING hosts to check...the 1st I/P is usually the appropriate default gateway (except for ppp0!) for the specified WAN interface,
 				# Include 												Google/Cloudflare public DNS
-				HOSTS="$(nvram get ${THIS}_gateway) $(nvram get ${THIS}_dns) 9.9.9.9 1.1.1.1"		# Target PING hosts
+				HOSTS="9.9.9.9 1.1.1.1"		# Target PING hosts
 			#else
-				#HOSTS="$(nvram get ${THIS}_dns) 9.9.9.9 1.1.1.1"		# Target PING hosts includes multiple DNS?
+				#HOSTS="9.9.9.9 1.1.1.1"		# Target PING hosts includes multiple DNS?
 			#fi
 		fi
 	fi
@@ -453,6 +463,7 @@ flock -n $FD || { Say "$VER Check WAN monitor ALREADY running...ABORTing"; exit;
 	echo -e $cBMAG
 	sleep 1
 	echo -e $(date)" Check WAN Monitor started.....PID="$$ >> $LOCKFILE
+	Say $(date)
 	Say $VER "Monitoring" $WAN_NAME $DEV_TXT "connection using" $TXT "(Tries="$TRIES")"
 #fi
 
@@ -509,7 +520,7 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 		fi
 
 		# Is there a cron schedule?
-		if [ -z "$(cru l | grep "$SNAME")" ];then
+		if [ -z "$(/etc/init.d/cru.sh l | grep "$SNAME")" ];then
 			if [ -z "$ONCE" ];then
 				if [ "$QUIET" != "quiet" ];then
 					Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"). Will check" $WAN_NAME "again in" $INTERVAL_SECS "secs"
@@ -528,8 +539,8 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 			# Should we RESET the cron i.e. ChkWAN_Reset_CRON.sh for Restart_WAN/Reboot_WAN (e.g. 2xWAN,3rd Reboot)
 			if [ "$QUIET" != "quiet" ];then
 				Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"); Terminating due to ACTIVE cron schedule"
-				if [ -n "$(cru l | grep -oE "${SNAME}.*Restart_WAN")" ] &&  [ -n "$(cru l | grep -oE "${SNAME}.*Reboot_WAN")" ];then
-					[ -f /jffs/scripts/ChkWAN_Reset_CRON.sh ] &&  /jffs/scripts/ChkWAN_Reset_CRON.sh	# v1.15
+				if [ -n "$(/etc/init.d/cru.sh l | grep -oE "${SNAME}.*Restart_WAN")" ] &&  [ -n "$(/etc/init.d/cru.sh l | grep -oE "${SNAME}.*Reboot_WAN")" ];then
+					[ -f /etc/init.d/ChkWAN_Reset_CRON.sh ] &&  /etc/init.d/ChkWAN_Reset_CRON.sh	# v1.15
 				fi
 				echo -e $cRESET
 			fi
@@ -583,13 +594,14 @@ if [ "$ACTION" == "WANONLY" ];then
 
 	#Say "Re-requesting monitoring....in" $INTERVAL_SECS "secs"
 	#sleep $INTERVAL_SECS
-	#sh /jffs/scripts/$0 &							# Let wan-start 'sh /jffs/scripts/ChkWAN.sh &' start the monitoring!!!!!
+	#sh /etc/init.d/$0 &							# Let wan-start 'sh /etc/init.d/ChkWAN.sh &' start the monitoring!!!!!
 
 else
 	echo -e ${cBRED}$aBLINK"\a\n\n\t"
 	Say "Rebooting..... (Action="$ACTION")"
 	echo -e "\n\t\t**********Rebooting**********\n\n"$cBGRE
-	service start_reboot							# Default REBOOT
+	#service start_reboot							# Default REBOOT
+	/sbin/reboot --reboot --force
 fi
 
 flock -u $FD				# v1.15
