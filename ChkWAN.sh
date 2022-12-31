@@ -30,10 +30,10 @@ VER="v1.17"
 #                   Will REBOOT router if cURL (i.e. NO PINGs attempted) fails to retrieve the remote end-point IP address of the WAN (Max 15bytes)
 #           ChkWAN  cron
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 30mins.
-#                   '/etc/init.d/cru.sh a ChkWAN "*/30 * * * * /etc/init.d/ChkWAN.sh"'
+#                   '/path/to/scripts/cru.sh a ChkWAN "*/30 * * * * /path/to/scripts/ChkWAN.sh"'
 #           ChkWAN  cron=\*/5
 #                   Will REBOOT router if the PINGs to ALL of the hosts FAILS, cron entry is added: Runs every 5mins.
-#                   '/etc/init.d/cru.sh a ChkWAN "*/5 * * * * /etc/init.d/ChkWAN.sh"'
+#                   '/path/to/scripts/cru.sh a ChkWAN "*/5 * * * * /path/to/scripts/ChkWAN.sh"'
 #                   NOTE: You need to escape the '*' on the commandline :-(
 #           ChkWAN  nowait
 #                   By default the script will wait 10 secs before actually starting the check; 'nowait' (when used by cron) skips this delay.
@@ -50,14 +50,14 @@ VER="v1.17"
 #           ChkWAN  curl verbose
 #                   The 'verbose' directive applies to any cURL transfer, and will display the cURL request data transfer as it happens
 #
-# Cron schedule may be reset /etc/init.d/ChkWAN_Reset_CRON.sh if you have:
+# Cron schedule may be reset /path/to/scripts/ChkWAN_Reset_CRON.sh if you have:
 #
 #      Set up a static cron schedule every 10 minutes 2 times WAN Restart 3rd REBOOT
-#	            /etc/init.d/cru.sh a Restart_WAN 00,10,30,40 * * * * /etc/init.d/ChkWAN.sh wan force nowait
-#	            /etc/init.d/cru.sh a Reboot_WAN 20,50 * * * * /etc/init.d/ChkWAN.sh reboot force nowait
-#      but /etc/init.d/ChkWAN_Reset_CRON.sh can change after very successful WAN UP check (Syslog monitor is better!!!?)
-#               /etc/init.d/cru.sh a Restart_WAN 28,38,58,8 * * * * /etc/init.d/ChkWAN.sh wan force nowait
-#               /etc/init.d/cru.sh a Reboot_WAN 48,18 * * * * /etc/init.d/ChkWAN.sh reboot force nowait
+#	            /path/to/scripts/cru.sh a Restart_WAN 00,10,30,40 * * * * /path/to/scripts/ChkWAN.sh wan force nowait
+#	            /path/to/scripts/cru.sh a Reboot_WAN 20,50 * * * * /path/to/scripts/ChkWAN.sh reboot force nowait
+#      but /path/to/scripts/ChkWAN_Reset_CRON.sh can change after very successful WAN UP check (Syslog monitor is better!!!?)
+#               /path/to/scripts/cru.sh a Restart_WAN 28,38,58,8 * * * * /path/to/scripts/ChkWAN.sh wan force nowait
+#               /path/to/scripts/cru.sh a Reboot_WAN 48,18 * * * * /path/to/scripts/ChkWAN.sh reboot force nowait
 
 
 
@@ -76,7 +76,7 @@ ANSIColours() {
 
 }
 Say(){
-   echo -e $$ $@ | logger -st "($(basename $0))"
+   echo -e $$ $@ | logger -st "$(date) - ($(basename $0))"
 }
 SayT(){
    echo -e $$ $@ | logger -t "($(basename $0))"
@@ -147,7 +147,7 @@ Check_WAN(){
 		done
 	else
 		# Max 15 char retrieval
-		IP=$(/etc/init.d/curl $CURL_INTERFACE --connect-timeout 5 $SILENT "http://ipecho.net/plain")		# v1.12 add $SILENT
+		IP=$($SCRIPT_PATH/curl $CURL_INTERFACE --connect-timeout 5 $SILENT "http://ipecho.net/plain")		# v1.12 add $SILENT
 		if [ -n "$IP" ];then
 			STATUS=1
 		fi
@@ -175,7 +175,7 @@ Check_WAN(){
 		WGET_DATA=$2
 		#wget -O /dev/null -t2 -T2 $WGET_DATA
 		METHOD="cURL data retrieval"						# v1.14
-		RESULTS=$(/etc/init.d/curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
+		RESULTS=$($SCRIPT_PATH/curl $CURL_INTERFACE $SILENT $WGET_DATA -w "%{time_connect},%{time_total},%{speed_download},%{http_code},%{size_download},%{url_effective}\n" -o /dev/null) # v1.12 Add $SILENT
 		RC=$?
 		RC18=$RC
 		TXTINTERRUPTED=
@@ -239,6 +239,9 @@ fi
 trap '' SIGHUP					# v1.15 Since 'nohup' doesn't work; Allow starting this script as a background task from command line!
 
 #FIRMWARE=$(echo $(nvram get buildno) | awk 'BEGIN { FS = "." } {printf("%03d%02d",$1,$2)}')
+
+# Script path
+SCRIPT_PATH="/etc/init.d"
 
 SNAME="${0##*/}"							# Script name
 
@@ -367,18 +370,18 @@ if [ -n "$1" ];then
 
 	if [ "$(echo "$@" | grep -c 'cron')" -gt 0 ];then				# v1.15
 		CRON_SPEC=$(echo "$@" | sed -n "s/^.*cron=//p" | awk '{print $0}')
-		/etc/init.d/cru.sh d WAN_Check
+		$SCRIPT_PATH/cru.sh d WAN_Check
 		if [ -z "$CRON_SPEC" ];then
-			/etc/init.d/cru.sh a WAN_Check "*/30 * * * * /etc/init.d/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
+			$SCRIPT_PATH/cru.sh a WAN_Check "*/30 * * * * $SCRIPT_PATH/$SNAME wan nowait once"		# Every 30 mins on the half hour v1.15
 		else
 			[ $(echo $CRON_SPEC | wc -w) -eq 1 ] && CRON_SPEC=$CRON_SPEC" \* \* \* \*"		# Allow just the Minutes argument
-			/etc/init.d/cru.sh a WAN_Check "$(echo $CRON_SPEC | tr -d '\') /etc/init.d/$SNAME"
+			$SCRIPT_PATH/cru.sh a WAN_Check "$(echo $CRON_SPEC | tr -d '\') $SCRIPT_PATH/$SNAME"
 		fi
-		CRONJOB=$(/etc/init.d/cru.sh l | grep "$0")
+		CRONJOB=$($SCRIPT_PATH/cru.sh l | grep "$0")
 		SayT "ChkWAN scheduled by cron"
 		echo -en $cBCYA"\n\tChkWAN scheduled by cron\n\n\t"$cBGRE
-		/etc/init.d/cru.sh l | grep $0
-		/etc/init.d/cru.sh l | grep $0 >>/tmp/syslog.log
+		$SCRIPT_PATH/cru.sh l | grep $0
+		$SCRIPT_PATH/cru.sh l | grep $0 >>/tmp/syslog.log
 		echo -e $cRESET
 	fi
 
@@ -463,7 +466,6 @@ flock -n $FD || { Say "$VER Check WAN monitor ALREADY running...ABORTing"; exit;
 	echo -e $cBMAG
 	sleep 1
 	echo -e $(date)" Check WAN Monitor started.....PID="$$ >> $LOCKFILE
-	Say $(date)
 	Say $VER "Monitoring" $WAN_NAME $DEV_TXT "connection using" $TXT "(Tries="$TRIES")"
 #fi
 
@@ -520,7 +522,7 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 		fi
 
 		# Is there a cron schedule?
-		if [ -z "$(/etc/init.d/cru.sh l | grep "$SNAME")" ];then
+		if [ -z "$($SCRIPT_PATH/cru.sh l | grep "$SNAME")" ];then
 			if [ -z "$ONCE" ];then
 				if [ "$QUIET" != "quiet" ];then
 					Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"). Will check" $WAN_NAME "again in" $INTERVAL_SECS "secs"
@@ -539,8 +541,8 @@ while [ $FAIL_CNT -lt $MAX_FAIL_CNT ]; do
 			# Should we RESET the cron i.e. ChkWAN_Reset_CRON.sh for Restart_WAN/Reboot_WAN (e.g. 2xWAN,3rd Reboot)
 			if [ "$QUIET" != "quiet" ];then
 				Say "Monitoring" $WAN_NAME $DEV_TXT "connection OK.....("$TXT"); Terminating due to ACTIVE cron schedule"
-				if [ -n "$(/etc/init.d/cru.sh l | grep -oE "${SNAME}.*Restart_WAN")" ] &&  [ -n "$(/etc/init.d/cru.sh l | grep -oE "${SNAME}.*Reboot_WAN")" ];then
-					[ -f /etc/init.d/ChkWAN_Reset_CRON.sh ] &&  /etc/init.d/ChkWAN_Reset_CRON.sh	# v1.15
+				if [ -n "$($SCRIPT_PATH/cru.sh l | grep -oE "${SNAME}.*Restart_WAN")" ] &&  [ -n "$($SCRIPT_PATH/cru.sh l | grep -oE "${SNAME}.*Reboot_WAN")" ];then
+					[ -f $SCRIPT_PATH/ChkWAN_Reset_CRON.sh ] &&  $SCRIPT_PATH/ChkWAN_Reset_CRON.sh	# v1.15
 				fi
 				echo -e $cRESET
 			fi
@@ -594,7 +596,7 @@ if [ "$ACTION" == "WANONLY" ];then
 
 	#Say "Re-requesting monitoring....in" $INTERVAL_SECS "secs"
 	#sleep $INTERVAL_SECS
-	#sh /etc/init.d/$0 &							# Let wan-start 'sh /etc/init.d/ChkWAN.sh &' start the monitoring!!!!!
+	#sh $SCRIPT_PATH/$0 &							# Let wan-start 'sh $SCRIPT_PATH/$(basename $0) &' start the monitoring!!!!!
 
 else
 	echo -e ${cBRED}$aBLINK"\a\n\n\t"
